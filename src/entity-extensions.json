@@ -1,0 +1,21 @@
+{
+  "entityTypeExtensions": [
+    {
+      "entityType": "User",
+      "properties": {
+        "googleRefreshToken": {
+          "type": "string"
+        },
+        "googleAccessToken": {
+          "type": "string"
+        },
+        "googleTokenExpiry": {
+          "type": "long"
+        },
+        "googleCalendarId": {
+          "type": "string"
+        }
+      }
+    }
+  ]
+}
