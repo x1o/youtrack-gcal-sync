@@ -51,9 +51,6 @@ exports.httpHandler = {
           const clientId = ctx.settings.clientId;
           const clientSecret = ctx.settings.clientSecret;
 
-          // ctx.response.json({clientId: clientId, clientSecret: clientSecret});
-            // return;
-
           if (!clientId || !clientSecret) {
             ctx.response.json({ error: 'OAuth credentials not configured in app settings' }, 400);
             return;
@@ -66,9 +63,6 @@ exports.httpHandler = {
             clientId,
             clientSecret
           );
-
-          // ctx.response.json({response: response});
-          // return;
 
           if ("error" in response) {
             console.error('OAuth token exchange failed:', response.error, '-', response.error_description);
@@ -154,7 +148,7 @@ exports.httpHandler = {
           // Get access token
           let accessToken;
           try {
-            accessToken = calendarHelpers.refreshAccessTokenForUser(ctx);
+            accessToken = calendarHelpers.refreshAccessTokenForUser(ctx, user);
           } catch (error) {
             console.error('Failed to get access token:', error.toString());
             ctx.response.json({ error: 'Failed to authenticate with Google Calendar' }, 401);

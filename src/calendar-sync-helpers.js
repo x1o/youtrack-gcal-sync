@@ -9,14 +9,12 @@ const http = require('@jetbrains/youtrack-scripting-api/http');
 // "1w 2d" → "P1W2D"
 // "2d 3h 30m" → "P2DT3H30M"
 
-// Helper function to get the user's calendar ID
-function getUserCalendarId(ctx) {
-  const user = ctx.currentUser;
+// Helper function to get a specific user's calendar ID
+function getUserCalendarId(user) {
   const calendarId = user.extensionProperties.googleCalendarId;
-    console.log(calendarId);
   
   if (!calendarId) {
-    throw new Error('Google Calendar ID not configured. Please set your calendar ID in the Google Calendar Setup widget.');
+    throw new Error(`Google Calendar ID not configured for user ${user.login}. They need to set their calendar ID in the Google Calendar Setup widget.`);
   }
   
   return calendarId;
@@ -26,7 +24,6 @@ function getUserCalendarId(ctx) {
 function buildQueryString(params) {
   return Object.keys(params)
     .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-    // .map(key => `${key}=${params[key]}`)
     .join('&');
 }
 
@@ -55,9 +52,8 @@ function exchangeCodeForTokensWithCredentials(authCode, clientId, clientSecret) 
   }
 }
 
-// Internal function to refresh access token using context (used by wrapper)
-function refreshAccessTokenForUser(ctx) {
-  const user = ctx.currentUser;
+// Internal function to refresh access token for a specific user
+function refreshAccessTokenForUser(ctx, user) {
   const settings = ctx.settings;
 
   // Check if we have required settings
@@ -67,7 +63,7 @@ function refreshAccessTokenForUser(ctx) {
 
   // Check if user has a refresh token
   if (!user.extensionProperties.googleRefreshToken) {
-    throw new Error('User has not authorized Google Calendar access');
+    throw new Error(`User ${user.login} has not authorized Google Calendar access`);
   }
 
   // Check if current access token is still valid
@@ -107,17 +103,17 @@ function refreshAccessTokenForUser(ctx) {
 
 // Wrapper function for Google Calendar API calls
 // Handles token refresh, connection setup, error handling, and response parsing
-function callGoogleCalendarAPI(ctx, method, endpoint, body = null) {
+function callGoogleCalendarAPI(ctx, user, method, endpoint, body = null) {
   let accessToken;
   let calendarId;
   
   try {
     // Get user's calendar ID
-    calendarId = getUserCalendarId(ctx);
-    console.log('Using calendar ID:', calendarId);
+    calendarId = getUserCalendarId(user);
+    console.log(`Using calendar ID for user ${user.login}:`, calendarId);
     
     // Refresh access token if needed
-    accessToken = refreshAccessTokenForUser(ctx);
+    accessToken = refreshAccessTokenForUser(ctx, user);
   } catch (error) {
     console.error('Failed to prepare API call:', error.toString());
     throw new Error(`API call preparation failed: ${error.message}`);
