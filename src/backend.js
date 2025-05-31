@@ -1,4 +1,5 @@
 const calendarHelpers = require('./calendar-sync-helpers');
+const http = require('@jetbrains/youtrack-scripting-api/http');
 
 exports.httpHandler = {
   endpoints: [
@@ -47,30 +48,16 @@ exports.httpHandler = {
 
           const user = await ctx.currentUser;
 
-          // Check if refresh token is already saved and stop
-          // see https://groups.google.com/g/adwords-api/c/Ra6ZUUw-E_Y
-          // if (user.extensionProperties.googleRefreshToken) {
-            // console.warn(`User ${user.login} already has a refresh token, preventing overwrite`);
-            // ctx.response.json({ 
-              // error: 'You have already authorized Google Calendar. To re-authorize, please contact your administrator.' 
-            // }, 400);
-            // return;
-          // }
-
           const clientId = ctx.settings.clientId;
           const clientSecret = ctx.settings.clientSecret;
+
+          // ctx.response.json({clientId: clientId, clientSecret: clientSecret});
+            // return;
 
           if (!clientId || !clientSecret) {
             ctx.response.json({ error: 'OAuth credentials not configured in app settings' }, 400);
             return;
           }
-
-          // ctx.response.json({
-            // code: code,
-            // clientId: clientId,
-            // clientSecret: clientSecret
-          // });
-          // return;
 
           // Exchange code for tokens using modified helper
           console.log(`Exchanging authorization code for tokens for user: ${user.login}`);
@@ -80,7 +67,7 @@ exports.httpHandler = {
             clientSecret
           );
 
-          // ctx.response.json({ response: response });
+          // ctx.response.json({response: response});
           // return;
 
           if ("error" in response) {
@@ -88,16 +75,6 @@ exports.httpHandler = {
             ctx.response.json({error: response.error_description || 'Authorization failed'}, 400);
             return;
           }
-
-          // if ("error" in response) {
-            // if (response.error == 'invalid_grant') {
-                // msg = 'Already registered; see https://groups.google.com/g/adwords-api/c/Ra6ZUUw-E_Y'
-            // } else {
-                // msg = tokens.error_description
-            // }
-            // ctx.response.json({error: msg}, 500);
-            // return;
-          // }
 
           // Store tokens in user extension properties
           user.extensionProperties.googleRefreshToken = response.refresh_token;
@@ -108,7 +85,109 @@ exports.httpHandler = {
           ctx.response.json({ success: true });
         } catch (error) {
           console.error('Failed to complete OAuth token exchange:', error.toString());
-          // ctx.response.json({ error: 'Failed to complete authorization. Please try again.' }, 500);
+          ctx.response.json({ error: 'Failed to complete authorization. Please try again.' }, 500);
+        }
+      }
+    },
+    {
+      method: 'GET',
+      path: 'calendar/id',
+      handle: async function handle(ctx) {
+        try {
+          const user = await ctx.currentUser;
+          const calendarId = user.extensionProperties.googleCalendarId || '';
+          
+          console.log(`Retrieved calendar ID for user ${user.login}: ${calendarId || 'not set'}`);
+          ctx.response.json({ calendarId });
+        } catch (error) {
+          console.error('Failed to retrieve calendar ID:', error.toString());
+          ctx.response.json({ error: 'Failed to retrieve calendar ID' }, 500);
+        }
+      }
+    },
+    {
+      method: 'POST',
+      path: 'calendar/id',
+      handle: async function handle(ctx) {
+        try {
+          const { calendarId } = await ctx.request.json();
+          if (!calendarId || !calendarId.trim()) {
+            ctx.response.json({ error: 'Calendar ID is required' }, 400);
+            return;
+          }
+
+          const user = await ctx.currentUser;
+          
+          // Basic validation for calendar ID format
+          const trimmedId = calendarId.trim();
+          if (!trimmedId.includes('@')) {
+            ctx.response.json({ 
+              error: 'Invalid calendar ID format. It should be an email address or end with @group.calendar.google.com' 
+            }, 400);
+            return;
+          }
+
+          // Save the calendar ID
+          user.extensionProperties.googleCalendarId = trimmedId;
+          
+          console.log(`Calendar ID saved for user ${user.login}: ${trimmedId}`);
+          ctx.response.json({ success: true });
+        } catch (error) {
+          console.error('Failed to save calendar ID:', error.toString());
+          ctx.response.json({ error: 'Failed to save calendar ID' }, 500);
+        }
+      }
+    },
+    {
+      method: 'GET',
+      path: 'calendar/list',
+      handle: async function handle(ctx) {
+        try {
+          const user = await ctx.currentUser;
+          
+          // Check if user has authorized Google Calendar
+          if (!user.extensionProperties.googleRefreshToken) {
+            ctx.response.json({ error: 'Please authorize Google Calendar access first' }, 401);
+            return;
+          }
+          
+          // Get access token
+          let accessToken;
+          try {
+            accessToken = calendarHelpers.refreshAccessTokenForUser(ctx);
+          } catch (error) {
+            console.error('Failed to get access token:', error.toString());
+            ctx.response.json({ error: 'Failed to authenticate with Google Calendar' }, 401);
+            return;
+          }
+          
+          // List calendars
+          const connection = new http.Connection('https://www.googleapis.com');
+          connection.addHeader('Authorization', 'Bearer ' + accessToken);
+          
+          try {
+            const response = connection.getSync('/calendar/v3/users/me/calendarList', {});
+            const calendarList = JSON.parse(response.response);
+            
+            // Extract relevant information
+            const calendars = calendarList.items.map(cal => ({
+              id: cal.id,
+              summary: cal.summary,
+              primary: cal.primary || false,
+              accessRole: cal.accessRole
+            }));
+            
+            console.log(`Retrieved ${calendars.length} calendars for user ${user.login}`);
+            ctx.response.json({ calendars });
+            
+          } catch (error) {
+            console.error('Failed to list calendars:', error.toString());
+            ctx.response.json({ error: 'Failed to retrieve calendar list' }, 500);
+          }
+          
+        } catch (error) {
+          console.error('Failed to list calendars:', error.toString());
+          ctx.response.json({ error: 'An error occurred while listing calendars' }, 500);
         }
       }
     }

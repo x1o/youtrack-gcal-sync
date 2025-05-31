@@ -1,7 +1,26 @@
 const http = require('@jetbrains/youtrack-scripting-api/http');
 
-// OAuth Configuration (kept for backwards compatibility with existing calendar ID)
-const CALENDAR_ID = '***REMOVED***';
+// Note: YouTrack period fields return ISO 8601 duration format
+// User input → ISO format examples:
+// "30m" → "PT30M"
+// "2h" → "PT2H"
+// "3d" → "P3D"
+// "1w" → "P1W"
+// "1w 2d" → "P1W2D"
+// "2d 3h 30m" → "P2DT3H30M"
+
+// Helper function to get the user's calendar ID
+function getUserCalendarId(ctx) {
+  const user = ctx.currentUser;
+  const calendarId = user.extensionProperties.googleCalendarId;
+    console.log(calendarId);
+  
+  if (!calendarId) {
+    throw new Error('Google Calendar ID not configured. Please set your calendar ID in the Google Calendar Setup widget.');
+  }
+  
+  return calendarId;
+}
 
 // Helper function to build query strings
 function buildQueryString(params) {
@@ -90,13 +109,18 @@ function refreshAccessTokenForUser(ctx) {
 // Handles token refresh, connection setup, error handling, and response parsing
 function callGoogleCalendarAPI(ctx, method, endpoint, body = null) {
   let accessToken;
+  let calendarId;
   
   try {
+    // Get user's calendar ID
+    calendarId = getUserCalendarId(ctx);
+    console.log('Using calendar ID:', calendarId);
+    
     // Refresh access token if needed
     accessToken = refreshAccessTokenForUser(ctx);
   } catch (error) {
-    console.error('Failed to refresh access token:', error.toString());
-    throw new Error(`Authentication failed: ${error.message}`);
+    console.error('Failed to prepare API call:', error.toString());
+    throw new Error(`API call preparation failed: ${error.message}`);
   }
   
   // Create connection
@@ -110,7 +134,7 @@ function callGoogleCalendarAPI(ctx, method, endpoint, body = null) {
   let response;
   try {
     // Make the API call based on method
-    const fullUrl = `/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}/events${endpoint ? '/' + endpoint : ''}`;
+    const fullUrl = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${endpoint ? '/' + endpoint : ''}`;
     
     switch (method.toUpperCase()) {
       case 'GET':
@@ -361,9 +385,10 @@ function prepareEventData(issue) {
 }
 
 // Export all helper functions and constants
-exports.CALENDAR_ID = CALENDAR_ID;
+exports.getUserCalendarId = getUserCalendarId;
 exports.buildQueryString = buildQueryString;
 exports.exchangeCodeForTokensWithCredentials = exchangeCodeForTokensWithCredentials;
+exports.refreshAccessTokenForUser = refreshAccessTokenForUser;
 exports.callGoogleCalendarAPI = callGoogleCalendarAPI;
 exports.parseDuration = parseDuration;
 exports.parsePeriodToMinutes = parsePeriodToMinutes;

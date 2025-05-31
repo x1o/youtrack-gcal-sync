@@ -4,12 +4,14 @@
   "title": "Google Calendar Sync Settings",
   "properties": {
     "clientId": {
-      "title": "Google CLIENT_ID",
-      "type": "string"
+      "title": "Google OAuth Client ID",
+      "type": "string",
+      "x-scope": "GLOBAL"
     },
     "clientSecret": {
-      "title": "Google CLIENT_SECRET",
-      "type": "string"
+      "title": "Google OAuth Client secret",
+      "type": "string",
+      "x-scope": "GLOBAL"
     }
   },
   "required":[
