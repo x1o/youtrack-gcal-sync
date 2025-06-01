@@ -13,6 +13,10 @@ exports.rule = entities.Issue.onChange({
     if (!issue.isChanged('Assignee') && !newIssueWithAssignee) {
       return false;
     }
+
+    if (issue.id == "Issue.Draft") {
+      return false;
+    }
     
     // Always handle assignee changes
     return true;

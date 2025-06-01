@@ -10,6 +10,10 @@ exports.rule = entities.Issue.onChange({
     
     // If no assignee, nothing to do
     if (!assignee) return false;
+
+    if (issue.id == "Issue.Draft") {
+      return false;
+    }
     
     // Check if any relevant fields changed
     const startChanged = issue.isChanged('Start datetime');
