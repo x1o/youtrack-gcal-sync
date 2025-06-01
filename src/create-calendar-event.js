@@ -2,7 +2,7 @@ const entities = require('@jetbrains/youtrack-scripting-api/entities');
 const calendarHelpers = require('./calendar-sync-helpers');
 
 exports.rule = entities.Issue.onChange({
-  title: 'Sync calendar events when assignee changes',
+  title: 'Create calendar events when assignee changes',
   guard: (ctx) => {
     const issue = ctx.issue;
     
@@ -95,7 +95,7 @@ exports.rule = entities.Issue.onChange({
       }
       
     } catch (error) {
-      console.error(`Failed to sync calendar for issue ${issue.id}:`, error.message);
+      console.error(`Failed to manage calendar events for issue ${issue.id}:`, error.message);
       console.warn('Calendar sync failed during assignee change, but issue update was successful');
       // Don't throw - let the issue update complete
     }
