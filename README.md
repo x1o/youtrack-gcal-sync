@@ -51,9 +51,7 @@ Google Calendar access is somewhat involved.
 Install the app from the Market or by running
 
 ```bash
-npm install
-npm run build
-zip -r youtrack-gcal-sync.zip dist
+./build_zip.sh
 ```
 
 and installing the resulting ZIP archive manually.
