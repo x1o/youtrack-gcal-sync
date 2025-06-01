@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/youtrack-app.json",
   "name": "google-calendar-sync",
   "title": "Google Calendar Sync",
-  "description": "Sync YouTrack issues with Google Calendar using Service Account authentication",
+  "description": "Sync YouTrack issues with Google Calendar",
   "version": "0.0.1",
   "url": "https://github.com/x1o/youtrack-calendar-sync",
   "vendor": {
@@ -14,7 +14,7 @@
   "widgets": [
     {
       "key": "google-calendar-sync-widget",
-      "name": "Google Calendar Sync Widget",
+      "name": "Google Calendar Sync Settings",
       "indexPath": "google-calendar-sync-widget/index.html",
       "extensionPoint": "USER_PROFILE_SETTINGS",
       "iconPath": "google-calendar-sync-widget/widget-icon.svg",
