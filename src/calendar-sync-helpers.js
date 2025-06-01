@@ -103,7 +103,7 @@ function refreshAccessTokenForUser(ctx, user) {
 
 // Wrapper function for Google Calendar API calls
 // Handles token refresh, connection setup, error handling, and response parsing
-function callGoogleCalendarAPI(ctx, user, method, endpoint, body = null) {
+function callGoogleCalendarAPI(ctx, user, method, endpoint, body = null, returnFullResponse = false) {
   let accessToken;
   let calendarId;
   
@@ -161,7 +161,15 @@ function callGoogleCalendarAPI(ctx, user, method, endpoint, body = null) {
     // Parse JSON response
     if (response.response) {
       try {
-        return JSON.parse(response.response);
+        const parsedResponse = JSON.parse(response.response);
+        if (returnFullResponse) {
+          return {
+            data: parsedResponse,
+            status: response.status,
+            headers: response.headers
+          };
+        }
+        return parsedResponse;
       } catch (parseError) {
         console.error('Failed to parse Google Calendar API response:', response.response);
         throw new Error('Invalid response from Google Calendar API');
@@ -272,14 +280,12 @@ function formatReminderTime(minutes) {
 
 // Helper function to prepare event data
 function prepareEventData(issue) {
-  // Default to now if start datetime is not set
-  const startDate = issue.fields['Start datetime'] 
-    ? new Date(issue.fields['Start datetime']) 
-    : new Date();
-  
+  // Start datetime is required - don't create events for unplanned issues
   if (!issue.fields['Start datetime']) {
-    console.log('No start datetime specified, defaulting to now:', startDate.toISOString());
+    throw new Error('Cannot create calendar event without start datetime - issue is unplanned');
   }
+  
+  const startDate = new Date(issue.fields['Start datetime']);
   
   // Check if duration is specified
   const durationField = issue.fields.Duration;
@@ -287,7 +293,11 @@ function prepareEventData(issue) {
   
   let event = {
     summary: issue.summary,
-    description: `YouTrack Issue: ${issue.id}\n${issue.description || ''}`
+    description: `YouTrack Issue: ${issue.id}\n${issue.description || ''}`,
+    // Always include these fields to ensure proper event structure
+    transparency: 'opaque',
+    visibility: 'default',
+    status: 'confirmed'
   };
   
   if (isAllDay) {
