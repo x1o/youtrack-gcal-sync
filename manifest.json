@@ -5,7 +5,7 @@
   "description": "Sync YouTrack issues with Google Calendar",
   "version": "0.0.1",
   "icon": "icon.svg",
-  "url": "https://github.com/x1o/youtrack-calendar-sync",
+  "url": "https://github.com/x1o/youtrack-gcal-sync",
   "vendor": {
     "name": "Dmitry Zotikov",
     "url": "https://github.com/x1o",
@@ -18,7 +18,6 @@
       "name": "Google Calendar Sync Settings",
       "indexPath": "google-calendar-sync-widget/index.html",
       "extensionPoint": "USER_PROFILE_SETTINGS",
-      "iconPath": "google-calendar-sync-widget/widget-icon.svg",
       "description": ""
     }
   ]
