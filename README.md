@@ -81,3 +81,9 @@ See workflow logs and the browser console.
 
 Google only allows one active refresh token per user/app combination. To re-authenticate, [revoke the authentication manually](https://myaccount.google.com/connections) (see [this post](https://groups.google.com/g/adwords-api/c/Ra6ZUUw-E_Y)).
 
+## Known bugs
+
+* All-day events are created in the UTC timezone.  E.g. if the user's timezone
+  is 'UTC+1', creating an issue with `Start datetime` = *2020-01-02 00:00:00*
+  and an undefined `Duration` will actually create an all-day event at
+  *2020-01-01*. Workaround: use `Start datetime` at least *2020-01-02 01:00:00*.
