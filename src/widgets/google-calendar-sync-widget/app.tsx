@@ -38,6 +38,17 @@ interface CalendarListResponse {
   error?: string;
 }
 
+interface OAuthStatusResponse {
+  hasRefreshToken?: boolean;
+  hasAccessToken?: boolean;
+  refreshToken?: string;
+  accessToken?: string;
+  tokenExpiry?: number;
+  isTokenExpired?: boolean;
+  expiryDate?: string;
+  error?: string;
+}
+
 const AppComponent: React.FunctionComponent = () => {
   const [authUrl, setAuthUrl] = useState<string>('');
   const [authCode, setAuthCode] = useState<string>('');
@@ -49,6 +60,7 @@ const AppComponent: React.FunctionComponent = () => {
   const [availableCalendars, setAvailableCalendars] = useState<Calendar[]>([]);
   const [showCalendarList, setShowCalendarList] = useState<boolean>(false);
   const [message, setMessage] = useState<{type: AlertType, text: string} | null>(null);
+  const [oauthStatus, setOauthStatus] = useState<OAuthStatusResponse | null>(null);
 
   // Fetch OAuth URL and current calendar ID on component mount
   useEffect(() => {
@@ -73,6 +85,14 @@ const AppComponent: React.FunctionComponent = () => {
           setSavedCalendarId(calendarResult.calendarId);
           setCalendarId(calendarResult.calendarId);
         }
+
+        // Fetch OAuth status
+        console.log('Fetching OAuth status...');
+        const statusResult = await host.fetchApp('backend/oauth/status', {}) as OAuthStatusResponse;
+        if (!statusResult.error) {
+          console.log('OAuth status retrieved');
+          setOauthStatus(statusResult);
+        }
       } catch (error) {
         console.error('Error fetching initial data:', error);
         setMessage({type: AlertType.ERROR, text: 'Failed to load initial data'});
@@ -96,12 +116,20 @@ const AppComponent: React.FunctionComponent = () => {
         body: { code: authCode }
       }) as TokenResponse;
 
-      // console.log(result);
-
       if (result.success) {
         console.log('Authorization successful!');
         setMessage({type: AlertType.SUCCESS, text: 'Authorization successful! You can now use Google Calendar sync.'});
         setAuthCode('');
+        
+        // Refresh OAuth status
+        try {
+          const statusResult = await host.fetchApp('backend/oauth/status', {}) as OAuthStatusResponse;
+          if (!statusResult.error) {
+            setOauthStatus(statusResult);
+          }
+        } catch (error) {
+          console.error('Failed to refresh OAuth status:', error);
+        }
       } else if (result.error) {
         console.error('Authorization failed:', result.error);
         setMessage({type: AlertType.ERROR, text: result.error});
@@ -222,6 +250,34 @@ const AppComponent: React.FunctionComponent = () => {
           Submit Authorization Code
         </Button>
       </div>
+
+      {oauthStatus && oauthStatus.hasRefreshToken && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          backgroundColor: '#f5f5f5',
+          borderRadius: '4px',
+          fontSize: '13px'
+        }}>
+          <div style={{marginBottom: '8px', fontWeight: '500'}}>OAuth Status:</div>
+          <div style={{marginBottom: '4px'}}>
+            <span style={{color: '#666'}}>Refresh Token:</span>{' '}
+            <code style={{fontSize: '12px'}}>{oauthStatus.refreshToken || 'Not available'}</code>
+          </div>
+          <div style={{marginBottom: '4px'}}>
+            <span style={{color: '#666'}}>Access Token:</span>{' '}
+            <code style={{fontSize: '12px'}}>{oauthStatus.accessToken || 'Not available'}</code>
+            {oauthStatus.isTokenExpired && (
+              <span style={{color: '#d32f2f', marginLeft: '8px'}}>(Expired)</span>
+            )}
+          </div>
+          {oauthStatus.expiryDate && (
+            <div style={{fontSize: '12px', color: '#666'}}>
+              Expires: {new Date(oauthStatus.expiryDate).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
 
       <div style={{borderTop: '1px solid #ddd', paddingTop: '24px'}}>
         <h4>Step 2: Calendar Selection</h4>

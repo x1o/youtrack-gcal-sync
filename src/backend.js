@@ -36,6 +36,41 @@ exports.httpHandler = {
       }
     },
     {
+      method: 'GET',
+      path: 'oauth/status',
+      handle: async function handle(ctx) {
+        try {
+          const user = await ctx.currentUser;
+          
+          // Helper function to mask tokens (show first 5 and last 5 characters)
+          const maskToken = (token) => {
+            if (!token || token.length < 15) return null;
+            return `${token.substring(0, 5)}...${token.substring(token.length - 5)}`;
+          };
+          
+          const status = {
+            hasRefreshToken: !!user.extensionProperties.googleRefreshToken,
+            hasAccessToken: !!user.extensionProperties.googleAccessToken,
+            refreshToken: maskToken(user.extensionProperties.googleRefreshToken),
+            accessToken: maskToken(user.extensionProperties.googleAccessToken),
+            tokenExpiry: user.extensionProperties.googleTokenExpiry || null
+          };
+          
+          // Calculate if token is expired
+          if (status.tokenExpiry) {
+            status.isTokenExpired = Date.now() > status.tokenExpiry;
+            status.expiryDate = new Date(status.tokenExpiry).toISOString();
+          }
+          
+          console.log(`Retrieved OAuth status for user ${user.login}`);
+          ctx.response.json(status);
+        } catch (error) {
+          console.error('Failed to retrieve OAuth status:', error.toString());
+          ctx.response.json({ error: 'Failed to retrieve OAuth status' }, 500);
+        }
+      }
+    },
+    {
       method: 'POST',
       path: 'oauth/token',
       handle: async function handle(ctx) {
