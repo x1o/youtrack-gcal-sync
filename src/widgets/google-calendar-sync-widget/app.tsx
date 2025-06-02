@@ -120,7 +120,7 @@ const AppComponent: React.FunctionComponent = () => {
         console.log('Authorization successful!');
         setMessage({type: AlertType.SUCCESS, text: 'Authorization successful! You can now use Google Calendar sync.'});
         setAuthCode('');
-        
+
         // Refresh OAuth status
         try {
           const statusResult = await host.fetchApp('backend/oauth/status', {}) as OAuthStatusResponse;
@@ -205,7 +205,7 @@ const AppComponent: React.FunctionComponent = () => {
   return (
     <div className="widget">
       <h3>Google Calendar Setup</h3>
-      
+
       {message && (
         <Alert type={message.type} closeable onClose={() => setMessage(null)}>
           {message.text}
@@ -223,7 +223,7 @@ const AppComponent: React.FunctionComponent = () => {
               <li>Copy the authorization code from the success page</li>
               <li>Paste it below and click Submit</li>
             </ol>
-            
+
             <div style={{marginBottom: '16px'}}>
               <a href={authUrl} target="_blank" rel="noopener noreferrer">
                 Authorize Google Calendar Access

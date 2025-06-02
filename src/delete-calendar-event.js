@@ -10,48 +10,48 @@ exports.rule = entities.Issue.onChange({
   guard: (ctx) => {
     const issue = ctx.issue;
     const eventId = issue.fields['Calendar Event ID'];
-    
+
     console.log('Delete guard - Becomes removed:', issue.becomesRemoved, 'Calendar Event ID:', eventId);
-    
+
     // Delete calendar event when issue is removed and has an event ID
     return issue.becomesRemoved && eventId;
   },
   action: async (ctx) => {
     const issue = ctx.issue;
     const eventId = issue.fields['Calendar Event ID'];
-    
+
     // Get the assignee who owns the calendar event
     const assignee = issue.fields.Assignee;
-    
+
     if (!assignee) {
       console.warn('No assignee found for calendar event deletion');
       return;
     }
-    
+
     try {
       console.log('Deleting calendar event for removed issue:', issue.id, '-', issue.summary);
       console.log('From assignee:', assignee.login);
       console.log('Calendar event ID to delete:', eventId);
-      
+
       // Verify we have an event ID (field access might be limited during removal)
       if (!eventId) {
         console.warn('No Calendar Event ID found during removal - field might not be accessible');
         return;
       }
-      
+
       // Check if assignee has calendar configured
       if (!assignee.extensionProperties.googleCalendarId || !assignee.extensionProperties.googleRefreshToken) {
         console.warn(`Assignee ${assignee.login} no longer has calendar access configured`);
         return;
       }
-      
+
       // Delete calendar event using the wrapper with assignee as the user
       const result = calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'DELETE', encodeURIComponent(eventId));
-      
+
       console.log('Calendar event deleted successfully. Status:', result.status);
-      
+
       // Note: We don't need to clear the Calendar Event ID field since the issue is being deleted
-      
+
     } catch (error) {
       console.error(`Failed to delete calendar event for assignee ${assignee.login} on issue ${issue.id}:`, error.message);
       console.warn('Calendar event deletion failed, but issue deletion will proceed');

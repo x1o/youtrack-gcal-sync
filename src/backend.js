@@ -41,13 +41,13 @@ exports.httpHandler = {
       handle: async function handle(ctx) {
         try {
           const user = await ctx.currentUser;
-          
+
           // Helper function to mask tokens (show first 5 and last 5 characters)
           const maskToken = (token) => {
             if (!token || token.length < 15) return null;
             return `${token.substring(0, 5)}...${token.substring(token.length - 5)}`;
           };
-          
+
           const status = {
             hasRefreshToken: !!user.extensionProperties.googleRefreshToken,
             hasAccessToken: !!user.extensionProperties.googleAccessToken,
@@ -55,13 +55,13 @@ exports.httpHandler = {
             accessToken: maskToken(user.extensionProperties.googleAccessToken),
             tokenExpiry: user.extensionProperties.googleTokenExpiry || null
           };
-          
+
           // Calculate if token is expired
           if (status.tokenExpiry) {
             status.isTokenExpired = Date.now() > status.tokenExpiry;
             status.expiryDate = new Date(status.tokenExpiry).toISOString();
           }
-          
+
           console.log(`Retrieved OAuth status for user ${user.login}`);
           ctx.response.json(status);
         } catch (error) {
@@ -125,7 +125,7 @@ exports.httpHandler = {
         try {
           const user = await ctx.currentUser;
           const calendarId = user.extensionProperties.googleCalendarId || '';
-          
+
           console.log(`Retrieved calendar ID for user ${user.login}: ${calendarId || 'not set'}`);
           ctx.response.json({ calendarId });
         } catch (error) {
@@ -146,7 +146,7 @@ exports.httpHandler = {
           }
 
           const user = await ctx.currentUser;
-          
+
           // Basic validation for calendar ID format
           const trimmedId = calendarId.trim();
           if (!trimmedId.includes('@')) {
@@ -158,7 +158,7 @@ exports.httpHandler = {
 
           // Save the calendar ID
           user.extensionProperties.googleCalendarId = trimmedId;
-          
+
           console.log(`Calendar ID saved for user ${user.login}: ${trimmedId}`);
           ctx.response.json({ success: true });
         } catch (error) {
@@ -173,13 +173,13 @@ exports.httpHandler = {
       handle: async function handle(ctx) {
         try {
           const user = await ctx.currentUser;
-          
+
           // Check if user has authorized Google Calendar
           if (!user.extensionProperties.googleRefreshToken) {
             ctx.response.json({ error: 'Please authorize Google Calendar access first' }, 401);
             return;
           }
-          
+
           // Get access token
           let accessToken;
           try {
@@ -189,15 +189,15 @@ exports.httpHandler = {
             ctx.response.json({ error: 'Failed to authenticate with Google Calendar' }, 401);
             return;
           }
-          
+
           // List calendars
           const connection = new http.Connection('https://www.googleapis.com');
           connection.addHeader('Authorization', 'Bearer ' + accessToken);
-          
+
           try {
             const response = connection.getSync('/calendar/v3/users/me/calendarList', {});
             const calendarList = JSON.parse(response.response);
-            
+
             // Extract relevant information
             const calendars = calendarList.items.map(cal => ({
               id: cal.id,
@@ -205,15 +205,15 @@ exports.httpHandler = {
               primary: cal.primary || false,
               accessRole: cal.accessRole
             }));
-            
+
             console.log(`Retrieved ${calendars.length} calendars for user ${user.login}`);
             ctx.response.json({ calendars });
-            
+
           } catch (error) {
             console.error('Failed to list calendars:', error.toString());
             ctx.response.json({ error: 'Failed to retrieve calendar list' }, 500);
           }
-          
+
         } catch (error) {
           console.error('Failed to list calendars:', error.toString());
           ctx.response.json({ error: 'An error occurred while listing calendars' }, 500);
