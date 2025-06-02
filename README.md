@@ -81,7 +81,7 @@ Google only allows one active refresh token per user/app combination. To re-auth
 
 ## Known bugs
 
-* All-day events are created in the UTC timezone.  E.g. if the user's timezone
+* ([#11](https://github.com/x1o/youtrack-gcal-sync/issues/11)) All-day events are created in the UTC timezone.  E.g. if the user's timezone
   is 'UTC+1', creating an issue with `Start datetime` = *2020-01-02 00:00:00*
   and an undefined `Duration` will actually create an all-day event at
   *2020-01-01*. Workaround: use `Start datetime` at least *2020-01-02 01:00:00*.
