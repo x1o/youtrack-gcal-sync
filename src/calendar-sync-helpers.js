@@ -28,20 +28,18 @@ function buildQueryString(params) {
 }
 
 // Function to exchange authorization code for tokens (used by the app)
-function exchangeCodeForTokensWithCredentials(authCode, clientId, clientSecret) {
+function exchangeCodeForTokensWithCredentials(authCode, settings) {
   const connection = new http.Connection('https://oauth2.googleapis.com');
   connection.addHeader('Content-Type', 'application/x-www-form-urlencoded');
 
-  const params = buildQueryString({
-    code: authCode,
-    client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
-    grant_type: 'authorization_code'
-  });
-
   try {
-    const tokenResponse = connection.postSync('/token', {}, params);
+    const tokenResponse = connection.postSync('/token', {
+      code: authCode,
+      client_id: settings.clientId,
+      client_secret: settings.clientSecret,
+      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
+      grant_type: 'authorization_code'
+    });
     const tokens = JSON.parse(tokenResponse.response);
     return tokens;
   } catch (error) {

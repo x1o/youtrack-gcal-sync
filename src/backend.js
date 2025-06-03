@@ -83,20 +83,11 @@ exports.httpHandler = {
 
           const user = await ctx.currentUser;
 
-          const clientId = ctx.settings.clientId;
-          const clientSecret = ctx.settings.clientSecret;
-
-          if (!clientId || !clientSecret) {
-            ctx.response.json({ error: 'OAuth credentials not configured in app settings' }, 400);
-            return;
-          }
-
           // Exchange code for tokens using modified helper
           console.log(`Exchanging authorization code for tokens for user: ${user.login}`);
           const response = await calendarHelpers.exchangeCodeForTokensWithCredentials(
             code,
-            clientId,
-            clientSecret
+            ctx.settings
           );
 
           if ("error" in response) {

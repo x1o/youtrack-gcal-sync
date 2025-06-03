@@ -11,6 +11,7 @@
     "clientSecret": {
       "title": "Google OAuth Client secret",
       "type": "string",
+      "format": "secret",
       "x-scope": "GLOBAL"
     }
   },
