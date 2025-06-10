@@ -247,12 +247,12 @@ function parsePeriodToMinutes(periodField) {
 }
 
 // Helper function to parse duration
-function parseDuration(durationField) {
+function parseEstimation(durationField) {
   if (!durationField) {
     return null;  // Return null when no duration is set
   }
 
-  console.log('Duration:', durationField.toString());
+  console.log('Estimation:', durationField.toString());
   const minutes = parsePeriodToMinutes(durationField);
   return minutes ? minutes * 60 * 1000 : null;  // Convert minutes to milliseconds
 }
@@ -286,7 +286,7 @@ function prepareEventData(issue) {
   const startDate = new Date(issue.fields['Start datetime']);
 
   // Check if duration is specified
-  const durationField = issue.fields.Duration;
+  const durationField = issue.fields.Estimation;
   const isAllDay = !durationField;
 
   let event = {
@@ -313,7 +313,7 @@ function prepareEventData(issue) {
     };
   } else {
     // Parse duration for timed events
-    const durationMs = parseDuration(durationField);
+    const durationMs = parseEstimation(durationField);
     const durationMinutes = Math.round(durationMs / 60000);
 
     // Warn if duration seems unusually long (more than 1 week)
@@ -394,7 +394,7 @@ exports.buildQueryString = buildQueryString;
 exports.exchangeCodeForTokensWithCredentials = exchangeCodeForTokensWithCredentials;
 exports.refreshAccessTokenForUser = refreshAccessTokenForUser;
 exports.callGoogleCalendarAPI = callGoogleCalendarAPI;
-exports.parseDuration = parseDuration;
+exports.parseEstimation = parseEstimation;
 exports.parsePeriodToMinutes = parsePeriodToMinutes;
 exports.formatReminderTime = formatReminderTime;
 exports.prepareEventData = prepareEventData;

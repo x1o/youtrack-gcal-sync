@@ -17,7 +17,7 @@ exports.rule = entities.Issue.onChange({
 
     // Check if any relevant fields changed
     const startChanged = issue.isChanged('Start datetime');
-    const durationChanged = issue.isChanged('Duration');
+    const durationChanged = issue.isChanged('Estimation');
     const reminderChanged = issue.isChanged('Remind before');
     const summaryChanged = issue.isChanged('summary');
     const resolutionChanged = issue.becomesResolved || issue.becomesUnresolved;
@@ -33,7 +33,7 @@ exports.rule = entities.Issue.onChange({
       'Start changed:', startChanged, 
       'Start becoming null:', startBecomingNull,
       'Start becoming set:', startBecomingSet,
-      'Duration changed:', durationChanged,
+      'Estimation changed:', durationChanged,
       'Reminder changed:', reminderChanged,
       'Summary changed:', summaryChanged,
       'Resolution changed:', resolutionChanged);
@@ -102,14 +102,14 @@ exports.rule = entities.Issue.onChange({
       console.log('Updating existing calendar event:', eventId);
 
       // Check if we're switching between all-day and timed event
-      const durationChanged = issue.isChanged('Duration');
-      const oldDuration = issue.oldValue('Duration');
-      const newDuration = issue.fields.Duration;
+      const durationChanged = issue.isChanged('Estimation');
+      const oldEstimation = issue.oldValue('Estimation');
+      const newEstimation = issue.fields.Estimation;
       const switchingEventType = durationChanged && 
-        ((oldDuration === null || oldDuration === undefined) !== (newDuration === null || newDuration === undefined));
+        ((oldEstimation === null || oldEstimation === undefined) !== (newEstimation === null || newEstimation === undefined));
 
       if (switchingEventType) {
-        console.log(`Switching event type: ${oldDuration ? 'Timed' : 'All-day'} → ${newDuration ? 'Timed' : 'All-day'}`);
+        console.log(`Switching event type: ${oldEstimation ? 'Timed' : 'All-day'} → ${newEstimation ? 'Timed' : 'All-day'}`);
         console.log('Event type switch detected - will delete and recreate event');
 
         try {
@@ -223,7 +223,7 @@ exports.rule = entities.Issue.onChange({
     'Start datetime': {
       type: entities.Field.dateTimeType
     },
-    Duration: {
+    Estimation: {
       type: entities.Field.periodType
     },
     'Remind before': {

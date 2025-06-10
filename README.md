@@ -21,7 +21,7 @@ Map YouTrack issues to Google Calendar events.
 |-------------------|------------|------------------------------------------------------------------------------|
 | Assignee          | User       | Calendar events are created in the issue assignee's calendar, if configured. |
 | Start datetime    | dateTime   | If not specified, the event isn't created.                                   |
-| Duration          | period     | If not specified, the event is "All-day".                                    |
+| Estimation          | period     | If not specified, the event is "All-day".                                    |
 | Remind before     | period     |                                                                              |
 | Calendar Event ID | string     | Google Calendar event's ID.                                                  |
 
@@ -83,5 +83,5 @@ Google only allows one active refresh token per user/app combination. To re-auth
 
 * ([#11](https://github.com/x1o/youtrack-gcal-sync/issues/11)) All-day events are created in the UTC timezone.  E.g. if the user's timezone
   is 'UTC+1', creating an issue with `Start datetime` = *2020-01-02 00:00:00*
-  and an undefined `Duration` will actually create an all-day event at
+  and an undefined `Estimation` will actually create an all-day event at
   *2020-01-01*. Workaround: use `Start datetime` at least *2020-01-02 01:00:00*.

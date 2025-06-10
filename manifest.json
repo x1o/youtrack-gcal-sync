@@ -3,7 +3,7 @@
   "name": "google-calendar-sync",
   "title": "Google Calendar Sync",
   "description": "Sync YouTrack issues with Google Calendar",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "icon.svg",
   "url": "https://github.com/x1o/youtrack-gcal-sync",
   "vendor": {

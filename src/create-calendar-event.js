@@ -111,7 +111,7 @@ exports.rule = entities.Issue.onChange({
     'Start datetime': {
       type: entities.Field.dateTimeType
     },
-    Duration: {
+    Estimation: {
       type: entities.Field.periodType
     },
     'Remind before': {
