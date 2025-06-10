@@ -53,12 +53,7 @@ function exchangeCodeForTokensWithCredentials(authCode, settings) {
 // Internal function to refresh access token for a specific user
 function refreshAccessTokenForUser(ctx, user) {
   const settings = ctx.settings;
-
-  // Check if we have required settings
-  if (!settings.clientId || !settings.clientSecret) {
-    throw new Error('OAuth client credentials not configured in app settings');
-  }
-
+  
   // Check if user has a refresh token
   if (!user.extensionProperties.googleRefreshToken) {
     throw new Error(`User ${user.login} has not authorized Google Calendar access`);
@@ -69,22 +64,19 @@ function refreshAccessTokenForUser(ctx, user) {
   if (user.extensionProperties.googleAccessToken && Date.now() < tokenExpiry) {
     return user.extensionProperties.googleAccessToken;
   }
-
   // Refresh the token
   console.log('Refreshing access token for user:', user.login);
 
   const connection = new http.Connection('https://oauth2.googleapis.com');
   connection.addHeader('Content-Type', 'application/x-www-form-urlencoded');
 
-  const refreshParams = buildQueryString({
-    refresh_token: user.extensionProperties.googleRefreshToken,
-    client_id: settings.clientId,
-    client_secret: settings.clientSecret,
-    grant_type: 'refresh_token'
-  });
-
   try {
-    const refreshResponse = connection.postSync('/token', {}, refreshParams);
+    const refreshResponse = connection.postSync('/token', {
+      refresh_token: user.extensionProperties.googleRefreshToken,
+      client_id: settings.clientId,
+      client_secret: settings.clientSecret,
+      grant_type: 'refresh_token'
+    });
     const refreshData = JSON.parse(refreshResponse.response);
 
     // Update user properties
