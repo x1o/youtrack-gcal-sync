@@ -53,7 +53,7 @@ function exchangeCodeForTokensWithCredentials(authCode, settings) {
 // Internal function to refresh access token for a specific user
 function refreshAccessTokenForUser(ctx, user) {
   const settings = ctx.settings;
-  
+
   // Check if user has a refresh token
   if (!user.extensionProperties.googleRefreshToken) {
     throw new Error(`User ${user.login} has not authorized Google Calendar access`);

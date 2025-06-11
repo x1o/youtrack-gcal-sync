@@ -178,7 +178,13 @@ const AppComponent: React.FunctionComponent = () => {
     setMessage(null);
 
     try {
-      const result = await host.fetchApp('backend/calendar/list', {}) as CalendarListResponse;
+      const result = await host.fetchApp(
+      	'backend/calendar/list',
+      	{
+      	  method: 'POST',
+      	  body: {}
+      	}
+      ) as CalendarListResponse;
 
       if (result.calendars) {
         console.log('Calendars loaded:', result.calendars.length);

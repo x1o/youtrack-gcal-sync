@@ -159,7 +159,7 @@ exports.httpHandler = {
       }
     },
     {
-      method: 'GET',
+      method: 'POST',
       path: 'calendar/list',
       handle: async function handle(ctx) {
         try {
