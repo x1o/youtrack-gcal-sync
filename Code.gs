@@ -174,9 +174,13 @@ function createCalendarEvent(params) {
     }
     
     // Add reminders if specified
-    if (eventData.reminderMinutes && eventData.reminderMinutes > 0) {
+    if (eventData.reminderMinutes !== undefined && eventData.reminderMinutes >= 0) {
       event.addPopupReminder(eventData.reminderMinutes);
-      console.log('Added reminder:', eventData.reminderMinutes, 'minutes before event');
+      if (eventData.reminderMinutes === 0) {
+        console.log('Added reminder: at event start');
+      } else {
+        console.log('Added reminder:', eventData.reminderMinutes, 'minutes before event');
+      }
     }
     
     // Get the event ID and strip @google.com suffix if present
@@ -300,9 +304,13 @@ function updateCalendarEvent(params) {
     // Update reminders
     if (eventData.reminderMinutes !== undefined) {
       event.removeAllReminders();
-      if (eventData.reminderMinutes > 0) {
+      if (eventData.reminderMinutes >= 0) {
         event.addPopupReminder(eventData.reminderMinutes);
-        console.log('Updated reminder:', eventData.reminderMinutes, 'minutes');
+        if (eventData.reminderMinutes === 0) {
+          console.log('Updated reminder: at event start');
+        } else {
+          console.log('Updated reminder:', eventData.reminderMinutes, 'minutes');
+        }
       } else {
         console.log('Removed all reminders');
       }

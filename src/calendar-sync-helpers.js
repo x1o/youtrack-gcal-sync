@@ -301,8 +301,12 @@ function prepareEventData(issue) {
   const remindBeforeField = issue.fields['Remind before'];
   if (remindBeforeField) {
     const reminderMinutes = parsePeriodToMinutes(remindBeforeField);
-    if (reminderMinutes) {
-      console.log(`Adding reminder: ${formatReminderTime(reminderMinutes)} before event`);
+    if (reminderMinutes !== null && reminderMinutes !== undefined) {
+      if (reminderMinutes === 0) {
+        console.log('Adding reminder: at event start (0 minutes before)');
+      } else {
+        console.log(`Adding reminder: ${formatReminderTime(reminderMinutes)} before event`);
+      }
 
       // Google Calendar has some limits on reminder times:
       // - Maximum is typically 40320 minutes (4 weeks)
