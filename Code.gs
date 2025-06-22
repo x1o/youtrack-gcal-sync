@@ -149,7 +149,22 @@ function createCalendarEvent(params) {
     
     // Handle all-day vs timed events
     if (eventData.isAllDay) {
-      const startDate = new Date(eventData.startDate);
+      let startDate;
+      
+      // Handle timezone conversion for all-day events
+      if (eventData.utcStartDateTime && eventData.userTimeZone) {
+        // Convert UTC datetime to user's timezone and extract date
+        const utcDate = new Date(eventData.utcStartDateTime);
+        const localDateStr = Utilities.formatDate(utcDate, eventData.userTimeZone, 'yyyy-MM-dd');
+        startDate = new Date(localDateStr + 'T00:00:00');
+        
+        console.log(`Timezone conversion: UTC ${eventData.utcStartDateTime} → ${localDateStr} in ${eventData.userTimeZone}`);
+      } else {
+        // Fallback to original date if timezone info not available
+        startDate = new Date(eventData.startDate);
+        console.log('Using provided startDate without timezone conversion');
+      }
+      
       event = calendar.createAllDayEvent(
         eventData.summary,
         startDate,
@@ -299,6 +314,25 @@ function updateCalendarEvent(params) {
       const endTime = new Date(eventData.endDateTime);
       event.setTime(startTime, endTime);
       console.log('Updated event times:', startTime.toISOString(), 'to', endTime.toISOString());
+    } else if (eventData.startDate || (eventData.utcStartDateTime && eventData.userTimeZone)) {
+      // Handle all-day event date updates with timezone conversion
+      let startDate;
+      
+      if (eventData.utcStartDateTime && eventData.userTimeZone) {
+        // Convert UTC datetime to user's timezone and extract date
+        const utcDate = new Date(eventData.utcStartDateTime);
+        const localDateStr = Utilities.formatDate(utcDate, eventData.userTimeZone, 'yyyy-MM-dd');
+        startDate = new Date(localDateStr + 'T00:00:00');
+        
+        console.log(`Updated all-day event date with timezone conversion: UTC ${eventData.utcStartDateTime} → ${localDateStr} in ${eventData.userTimeZone}`);
+      } else {
+        // Fallback to provided startDate
+        startDate = new Date(eventData.startDate);
+        console.log('Updated all-day event date without timezone conversion');
+      }
+      
+      // For all-day events, we need to set the date
+      event.setAllDayDate(startDate);
     }
     
     // Update reminders

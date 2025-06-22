@@ -275,8 +275,13 @@ function prepareEventData(issue) {
   if (isAllDay) {
     console.log('No duration specified, creating all-day event');
     
-    // For all-day events, use date string format
-    eventData.startDate = startDate.toISOString().split('T')[0];
+    // For all-day events, pass UTC datetime and user timezone to Apps Script for proper conversion
+    // This fixes the timezone bug where midnight in user timezone becomes previous day in UTC
+    eventData.startDate = null; // Let Apps Script calculate this
+    eventData.utcStartDateTime = startDate.toISOString();
+    eventData.userTimeZone = issue.fields.Assignee?.timeZoneId || 'UTC';
+    
+    console.log(`All-day event: UTC datetime ${eventData.utcStartDateTime}, user timezone ${eventData.userTimeZone}`);
   } else {
     // Parse duration for timed events
     const durationMs = parseEstimation(durationField);

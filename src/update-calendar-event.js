@@ -175,6 +175,8 @@ exports.rule = entities.Issue.onChange({
         const eventData = calendarHelpers.prepareEventData(issue);
         if (eventData.isAllDay) {
           updateData.startDate = eventData.startDate;
+          updateData.utcStartDateTime = eventData.utcStartDateTime;
+          updateData.userTimeZone = eventData.userTimeZone;
         } else {
           updateData.startDateTime = eventData.startDateTime;
           updateData.endDateTime = eventData.endDateTime;

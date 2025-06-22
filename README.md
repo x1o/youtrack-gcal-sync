@@ -107,9 +107,3 @@ That's it! Your YouTrack issues will now automatically sync with your Google Cal
 - View Apps Script execution logs at script.google.com → Executions
 - Use browser developer console for frontend widget issues
 
-## Known bugs
-
-* ([#11](https://github.com/x1o/youtrack-gcal-sync/issues/11)) All-day events are created in the UTC timezone.  E.g. if the user's timezone
-  is 'UTC+1', creating an issue with `Start datetime` = *2020-01-02 00:00:00*
-  and an undefined `Estimation` will actually create an all-day event at
-  *2020-01-01*. Workaround: use `Start datetime` at least *2020-01-02 01:00:00*.
