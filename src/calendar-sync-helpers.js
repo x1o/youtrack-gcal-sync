@@ -20,163 +20,148 @@ function getUserCalendarId(user) {
   return calendarId;
 }
 
-// Helper function to build query strings
-function buildQueryString(params) {
-  return Object.keys(params)
-    .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
-    .join('&');
+// Helper function to get user's Apps Script configuration
+function getUserAppsScriptConfig(user) {
+  const url = user.extensionProperties.googleAppsScriptUrl;
+  const apiKey = user.extensionProperties.googleAppsScriptApiKey;
+
+  if (!url || !apiKey) {
+    throw new Error(`Apps Script not configured for user ${user.login}. They need to set their Apps Script URL and API key in the Google Calendar Setup widget.`);
+  }
+
+  return { url, apiKey };
 }
 
-// Function to exchange authorization code for tokens (used by the app)
-function exchangeCodeForTokensWithCredentials(authCode, settings) {
-  const connection = new http.Connection('https://oauth2.googleapis.com');
-  connection.addHeader('Content-Type', 'application/x-www-form-urlencoded');
+// Wrapper function for Apps Script API calls
+// Handles redirects and response parsing properly
+function callAppsScriptAPI(user, action, params = {}) {
+  const { url, apiKey } = getUserAppsScriptConfig(user);
+  
+  console.log(`Making Apps Script API call for user ${user.login}, action: ${action}`);
+
+  // Prepare request payload
+  const payload = {
+    apiKey: apiKey,
+    action: action,
+    ...params
+  };
 
   try {
-    const tokenResponse = connection.postSync('/token', {
-      code: authCode,
-      client_id: settings.clientId,
-      client_secret: settings.clientSecret,
-      redirect_uri: 'urn:ietf:wg:oauth:2.0:oob',
-      grant_type: 'authorization_code'
-    });
-    const tokens = JSON.parse(tokenResponse.response);
-    return tokens;
-  } catch (error) {
-    if (error.response) {
-      console.error('Error response:', error.response);
-    }
-    throw error;
-  }
-}
-
-// Internal function to refresh access token for a specific user
-function refreshAccessTokenForUser(ctx, user) {
-  const settings = ctx.settings;
-
-  // Check if user has a refresh token
-  if (!user.extensionProperties.googleRefreshToken) {
-    throw new Error(`User ${user.login} has not authorized Google Calendar access`);
-  }
-
-  // Check if current access token is still valid
-  const tokenExpiry = user.extensionProperties.googleTokenExpiry || 0;
-  if (user.extensionProperties.googleAccessToken && Date.now() < tokenExpiry) {
-    return user.extensionProperties.googleAccessToken;
-  }
-  // Refresh the token
-  console.log('Refreshing access token for user:', user.login);
-
-  const connection = new http.Connection('https://oauth2.googleapis.com');
-  connection.addHeader('Content-Type', 'application/x-www-form-urlencoded');
-
-  try {
-    const refreshResponse = connection.postSync('/token', {
-      refresh_token: user.extensionProperties.googleRefreshToken,
-      client_id: settings.clientId,
-      client_secret: settings.clientSecret,
-      grant_type: 'refresh_token'
-    });
-    const refreshData = JSON.parse(refreshResponse.response);
-
-    // Update user properties
-    user.extensionProperties.googleAccessToken = refreshData.access_token;
-    user.extensionProperties.googleTokenExpiry = Date.now() + (refreshData.expires_in * 1000);
-
-    console.log('Access token refreshed successfully for user:', user.login);
-    return refreshData.access_token;
-  } catch (error) {
-    console.error('Failed to refresh access token:', error.toString());
-    throw error;
-  }
-}
-
-// Wrapper function for Google Calendar API calls
-// Handles token refresh, connection setup, error handling, and response parsing
-function callGoogleCalendarAPI(ctx, user, method, endpoint, body = null, returnFullResponse = false) {
-  let accessToken;
-  let calendarId;
-
-  try {
-    // Get user's calendar ID
-    calendarId = getUserCalendarId(user);
-    console.log(`Using calendar ID for user ${user.login}:`, calendarId);
-
-    // Refresh access token if needed
-    accessToken = refreshAccessTokenForUser(ctx, user);
-  } catch (error) {
-    console.error('Failed to prepare API call:', error.toString());
-    throw new Error(`API call preparation failed: ${error.message}`);
-  }
-
-  // Create connection
-  const connection = new http.Connection('https://www.googleapis.com');
-  connection.addHeader('Authorization', 'Bearer ' + accessToken);
-
-  if (body !== null) {
+    // Step 1: Make the initial POST request to Apps Script
+    const connection = new http.Connection(url);
     connection.addHeader('Content-Type', 'application/json');
-  }
-
-  let response;
-  try {
-    // Make the API call based on method
-    const fullUrl = `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events${endpoint ? '/' + endpoint : ''}`;
-
-    switch (method.toUpperCase()) {
-      case 'GET':
-        response = connection.getSync(fullUrl, {});
-        break;
-      case 'POST':
-        response = connection.postSync(fullUrl, {}, body ? JSON.stringify(body) : '');
-        break;
-      case 'PUT':
-        response = connection.putSync(fullUrl, {}, body ? JSON.stringify(body) : '');
-        break;
-      case 'PATCH':
-        response = connection.patchSync(fullUrl, {}, body ? JSON.stringify(body) : '');
-        break;
-      case 'DELETE':
-        response = connection.deleteSync(fullUrl, {});
-        break;
-      default:
-        throw new Error(`Unsupported HTTP method: ${method}`);
-    }
-
-    // Handle different response types
-    if (method.toUpperCase() === 'DELETE') {
-      // DELETE typically returns 204 No Content
-      return { success: true, status: response.status };
-    }
-
-    // Parse JSON response
-    if (response.response) {
-      try {
-        const parsedResponse = JSON.parse(response.response);
-        if (returnFullResponse) {
-          return {
-            data: parsedResponse,
-            status: response.status,
-            headers: response.headers
-          };
-        }
-        return parsedResponse;
-      } catch (parseError) {
-        console.error('Failed to parse Google Calendar API response:', response.response);
-        throw new Error('Invalid response from Google Calendar API');
+    
+    console.log('Making initial POST request to Apps Script...');
+    const initialResponse = connection.postSync('', {}, JSON.stringify(payload));
+    
+    // Step 2: Check if we got a redirect (Google Apps Script behavior)
+    // Note: Sometimes status is undefined in YouTrack, so check for HTML redirect pattern too
+    const isRedirect = (initialResponse.status >= 300 && initialResponse.status < 400) || 
+                      (initialResponse.response && initialResponse.response.includes('Moved Temporarily'));
+    
+    if (isRedirect) {
+      console.log(`Received redirect response (status ${initialResponse.status}), following redirect...`);
+      
+      // Try to extract redirect URL from Location header
+      let redirectUrl = null;
+      if (initialResponse.headers && initialResponse.headers.Location) {
+        redirectUrl = initialResponse.headers.Location;
+      } else if (initialResponse.headers && initialResponse.headers.location) {
+        redirectUrl = initialResponse.headers.location;
       }
+      
+      if (!redirectUrl) {
+        // If no location header, try to parse from HTML response
+        const htmlResponse = initialResponse.response || '';
+        console.log('Parsing redirect from HTML response...');
+        console.log('HTML response snippet:', htmlResponse.substring(0, 300));
+        
+        // Try multiple patterns to extract redirect URL
+        let hrefMatch = htmlResponse.match(/HREF="([^"]+)"/i);
+        if (!hrefMatch) {
+          // Try lowercase
+          hrefMatch = htmlResponse.match(/href="([^"]+)"/);
+        }
+        if (!hrefMatch) {
+          // Try without quotes
+          hrefMatch = htmlResponse.match(/href=([^\s>]+)/i);
+        }
+        
+        if (hrefMatch) {
+          redirectUrl = hrefMatch[1];
+          // Decode HTML entities
+          redirectUrl = redirectUrl.replace(/&amp;/g, '&');
+          console.log('Extracted URL from href:', redirectUrl);
+        } else {
+          // Try looking for the specific pattern in Google's redirect response
+          const fullUrlMatch = htmlResponse.match(/https:\/\/script\.googleusercontent\.com\/macros\/echo\?[^">\s]+/);
+          if (fullUrlMatch) {
+            redirectUrl = fullUrlMatch[0].replace(/&amp;/g, '&');
+            console.log('Found full URL in HTML:', redirectUrl);
+          }
+        }
+      }
+      
+      if (redirectUrl) {
+        console.log('Following redirect to:', redirectUrl);
+        
+        // Step 3: Make GET request to redirect URL
+        const redirectConnection = new http.Connection(redirectUrl);
+        const finalResponse = redirectConnection.getSync('', {});
+        
+        // Step 4: Parse the final JSON response
+        return parseAppsScriptResponse(finalResponse, user.login);
+      } else {
+        console.error('Failed to parse redirect URL from response. HTML content:', initialResponse.response ? initialResponse.response.substring(0, 500) : 'No response body');
+        throw new Error('Received redirect but could not find redirect URL. Check Apps Script deployment settings.');
+      }
+    } else {
+      // No redirect, parse response directly
+      console.log(`Received direct response (status ${initialResponse.status})`);
+      return parseAppsScriptResponse(initialResponse, user.login);
     }
-
-    return null;
 
   } catch (error) {
     // Enhanced error logging
-    console.error(`Google Calendar API ${method} request failed:`, error.toString());
+    console.error(`Apps Script API call failed for user ${user.login}:`, error.toString());
     if (error.response) {
       console.error('Error response:', typeof error.response === 'object' ? JSON.stringify(error.response) : error.response);
     }
 
     // Re-throw with more context
-    throw new Error(`Google Calendar API error: ${error.message || error.toString()}`);
+    throw new Error(`Apps Script API error: ${error.message || error.toString()}`);
+  }
+}
+
+// Helper function to parse Apps Script responses
+function parseAppsScriptResponse(response, userLogin) {
+  if (response.response) {
+    try {
+      const parsedResponse = JSON.parse(response.response);
+      
+      if (!parsedResponse.success) {
+        throw new Error(parsedResponse.error || 'Apps Script API call failed');
+      }
+      
+      console.log(`Apps Script API call successful for user ${userLogin}`);
+      return parsedResponse;
+    } catch (parseError) {
+      console.error('Failed to parse Apps Script response:', response.response);
+      throw new Error('Invalid response from Apps Script');
+    }
+  }
+
+  throw new Error('Empty response from Apps Script');
+}
+
+// Function to list user's calendars via Apps Script
+function listUserCalendars(user) {
+  try {
+    const response = callAppsScriptAPI(user, 'list-calendars');
+    return response.calendars || [];
+  } catch (error) {
+    console.error('Failed to list calendars via Apps Script:', error.toString());
+    throw new Error(`Failed to retrieve calendar list: ${error.message}`);
   }
 }
 
@@ -268,7 +253,7 @@ function formatReminderTime(minutes) {
   }
 }
 
-// Helper function to prepare event data
+// Helper function to prepare event data for Apps Script
 function prepareEventData(issue) {
   // Start datetime is required - don't create events for unplanned issues
   if (!issue.fields['Start datetime']) {
@@ -281,28 +266,17 @@ function prepareEventData(issue) {
   const durationField = issue.fields.Estimation;
   const isAllDay = !durationField;
 
-  let event = {
+  let eventData = {
     summary: issue.summary,
     description: `YouTrack Issue: ${issue.id}\n${issue.description || ''}`,
-    // Always include these fields to ensure proper event structure
-    transparency: 'opaque',
-    visibility: 'default',
-    status: 'confirmed'
+    isAllDay: isAllDay
   };
 
   if (isAllDay) {
     console.log('No duration specified, creating all-day event');
-
-    // Format date as YYYY-MM-DD for all-day events
-    const dateStr = startDate.toISOString().split('T')[0];
-
-    // For all-day events, use 'date' instead of 'dateTime'
-    event.start = {
-      date: dateStr
-    };
-    event.end = {
-      date: dateStr
-    };
+    
+    // For all-day events, use date string format
+    eventData.startDate = startDate.toISOString().split('T')[0];
   } else {
     // Parse duration for timed events
     const durationMs = parseEstimation(durationField);
@@ -318,18 +292,9 @@ function prepareEventData(issue) {
 
     console.log('Calendar event times - Start:', startDate.toISOString(), 'End:', endDate.toISOString());
 
-    // Note: Multi-day timed events will span across days in Google Calendar
-    // For example, a 3-day duration starting Monday 2pm will end Thursday 2pm
-
-    // For timed events, use 'dateTime' with timezone
-    event.start = {
-      dateTime: startDate.toISOString(),
-      timeZone: 'UTC'
-    };
-    event.end = {
-      dateTime: endDate.toISOString(),
-      timeZone: 'UTC'
-    };
+    // For timed events, use ISO datetime strings
+    eventData.startDateTime = startDate.toISOString();
+    eventData.endDateTime = endDate.toISOString();
   }
 
   // Add reminder if "Remind before" field is set
@@ -342,7 +307,6 @@ function prepareEventData(issue) {
       // Google Calendar has some limits on reminder times:
       // - Maximum is typically 40320 minutes (4 weeks)
       // - Minimum is 0 minutes (at event start)
-      // - For all-day events, reminders are typically at a specific time of day
       const maxReminderMinutes = 40320; // 4 weeks
       const actualReminderMinutes = Math.min(reminderMinutes, maxReminderMinutes);
 
@@ -350,42 +314,24 @@ function prepareEventData(issue) {
         console.warn(`Reminder time ${formatReminderTime(reminderMinutes)} exceeds Google Calendar maximum of 4 weeks. Setting to 4 weeks.`);
       }
 
-      event.reminders = {
-        useDefault: false,
-        overrides: [
-          {
-            method: 'popup',  // Can be 'popup' or 'email'
-            minutes: actualReminderMinutes
-          }
-          // You can add multiple reminders by adding more objects here
-          // Example: { method: 'email', minutes: actualReminderMinutes + 60 }
-        ]
-      };
+      eventData.reminderMinutes = actualReminderMinutes;
     } else {
-      console.log('Failed to parse reminder period - disabling reminders');
-      event.reminders = {
-        useDefault: false,
-        overrides: []
-      };
+      console.log('Failed to parse reminder period - no reminder set');
+      eventData.reminderMinutes = 0;
     }
   } else {
-    // Explicitly disable default reminders if no reminder is set
-    console.log('No reminder set - disabling default reminders');
-    event.reminders = {
-      useDefault: false,
-      overrides: []
-    };
+    console.log('No reminder set');
+    eventData.reminderMinutes = 0;
   }
 
-  return event;
+  return eventData;
 }
 
 // Export all helper functions and constants
 exports.getUserCalendarId = getUserCalendarId;
-exports.buildQueryString = buildQueryString;
-exports.exchangeCodeForTokensWithCredentials = exchangeCodeForTokensWithCredentials;
-exports.refreshAccessTokenForUser = refreshAccessTokenForUser;
-exports.callGoogleCalendarAPI = callGoogleCalendarAPI;
+exports.getUserAppsScriptConfig = getUserAppsScriptConfig;
+exports.callAppsScriptAPI = callAppsScriptAPI;
+exports.listUserCalendars = listUserCalendars;
 exports.parseEstimation = parseEstimation;
 exports.parsePeriodToMinutes = parsePeriodToMinutes;
 exports.formatReminderTime = formatReminderTime;

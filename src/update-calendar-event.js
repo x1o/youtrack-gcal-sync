@@ -49,9 +49,14 @@ exports.rule = entities.Issue.onChange({
     try {
       console.log('Processing calendar update for assignee:', assignee.login, 'Issue:', issue.id, '-', issue.summary);
 
-      // Check if assignee has calendar configured
-      if (!assignee.extensionProperties.googleCalendarId || !assignee.extensionProperties.googleRefreshToken) {
-        console.warn(`Assignee ${assignee.login} has no calendar configured`);
+      // Check if assignee has Apps Script configured
+      if (!assignee.extensionProperties.googleAppsScriptUrl || !assignee.extensionProperties.googleAppsScriptApiKey) {
+        console.warn(`Assignee ${assignee.login} has no Apps Script configured`);
+        return;
+      }
+
+      if (!assignee.extensionProperties.googleCalendarId) {
+        console.warn(`Assignee ${assignee.login} has no calendar ID configured`);
         return;
       }
 
@@ -60,15 +65,18 @@ exports.rule = entities.Issue.onChange({
         console.log('Start datetime added to unplanned issue - creating calendar event');
 
         try {
-          const newEventData = calendarHelpers.prepareEventData(issue);
+          const eventData = calendarHelpers.prepareEventData(issue);
 
-          console.log('Creating calendar event:', JSON.stringify(newEventData));
-          console.log('Event type:', newEventData.start.date ? 'All-day' : 'Timed');
+          console.log('Creating calendar event:', JSON.stringify(eventData));
+          console.log('Event type:', eventData.isAllDay ? 'All-day' : 'Timed');
 
-          const createdEvent = calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'POST', '', newEventData);
+          const result = calendarHelpers.callAppsScriptAPI(assignee, 'create', {
+            calendarId: assignee.extensionProperties.googleCalendarId,
+            eventData: eventData
+          });
 
-          console.log('Calendar event created:', createdEvent.id);
-          issue.fields['Calendar Event ID'] = createdEvent.id;
+          console.log('Calendar event created:', result.eventId);
+          issue.fields['Calendar Event ID'] = result.eventId;
         } catch (error) {
           console.error('Failed to create calendar event:', error.message);
         }
@@ -81,7 +89,10 @@ exports.rule = entities.Issue.onChange({
         console.log('Start datetime removed - deleting calendar event (issue is now unplanned)');
 
         try {
-          calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'DELETE', encodeURIComponent(eventId));
+          calendarHelpers.callAppsScriptAPI(assignee, 'delete', {
+            eventId: eventId,
+            calendarId: assignee.extensionProperties.googleCalendarId
+          });
           console.log('Calendar event deleted successfully');
 
           // Clear the event ID
@@ -115,25 +126,31 @@ exports.rule = entities.Issue.onChange({
         try {
           // Delete the existing event
           console.log('Deleting existing event:', eventId);
-          calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'DELETE', encodeURIComponent(eventId));
+          calendarHelpers.callAppsScriptAPI(assignee, 'delete', {
+            eventId: eventId,
+            calendarId: assignee.extensionProperties.googleCalendarId
+          });
           console.log('Existing event deleted');
 
           // Clear the event ID temporarily
           issue.fields['Calendar Event ID'] = null;
 
           // Create a new event with the correct type
-          const newEventData = calendarHelpers.prepareEventData(issue);
+          const eventData = calendarHelpers.prepareEventData(issue);
 
-          console.log('Creating new event with type:', newEventData.start.date ? 'All-day' : 'Timed');
-          console.log('New event data:', JSON.stringify(newEventData));
+          console.log('Creating new event with type:', eventData.isAllDay ? 'All-day' : 'Timed');
+          console.log('New event data:', JSON.stringify(eventData));
 
           // Create the new event
-          const newEvent = calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'POST', '', newEventData);
+          const result = calendarHelpers.callAppsScriptAPI(assignee, 'create', {
+            calendarId: assignee.extensionProperties.googleCalendarId,
+            eventData: eventData
+          });
 
-          console.log('New calendar event created:', newEvent.id);
+          console.log('New calendar event created:', result.eventId);
 
           // Save the new event ID
-          issue.fields['Calendar Event ID'] = newEvent.id;
+          issue.fields['Calendar Event ID'] = result.eventId;
           console.log('Calendar event type switch completed successfully');
 
         } catch (error) {
@@ -146,19 +163,25 @@ exports.rule = entities.Issue.onChange({
         return;
       }
 
-      // For non-type-switching updates, use PATCH
-      const patchData = {};
+      // For non-type-switching updates, update via Apps Script
+      const updateData = {};
+      let hasUpdates = false;
 
       // Handle time/duration changes (without type switch)
       if (issue.isChanged('Start datetime') || (durationChanged && !switchingEventType)) {
         console.log('Time/duration changed - updating dates');
 
-        // Prepare full event data to extract start/end
+        // Prepare full event data
         const eventData = calendarHelpers.prepareEventData(issue);
-        patchData.start = eventData.start;
-        patchData.end = eventData.end;
+        if (eventData.isAllDay) {
+          updateData.startDate = eventData.startDate;
+        } else {
+          updateData.startDateTime = eventData.startDateTime;
+          updateData.endDateTime = eventData.endDateTime;
+        }
+        hasUpdates = true;
 
-        console.log('Event type:', eventData.start.date ? 'All-day' : 'Timed');
+        console.log('Event type:', eventData.isAllDay ? 'All-day' : 'Timed');
       }
 
       // Handle reminder changes
@@ -167,10 +190,11 @@ exports.rule = entities.Issue.onChange({
 
         // Prepare full event data to extract reminders
         const eventData = calendarHelpers.prepareEventData(issue);
-        patchData.reminders = eventData.reminders;
+        updateData.reminderMinutes = eventData.reminderMinutes;
+        hasUpdates = true;
 
-        console.log('Reminder:', eventData.reminders.overrides.length > 0 
-          ? calendarHelpers.formatReminderTime(eventData.reminders.overrides[0].minutes) + ' before' 
+        console.log('Reminder:', eventData.reminderMinutes > 0 
+          ? calendarHelpers.formatReminderTime(eventData.reminderMinutes) + ' before' 
           : 'None');
       }
 
@@ -178,37 +202,43 @@ exports.rule = entities.Issue.onChange({
       if (issue.isChanged('summary')) {
         const oldSummary = issue.oldValue('summary');
         console.log('Title change:', oldSummary ? `"${oldSummary}" → "${issue.summary}"` : `New title: "${issue.summary}"`);
-        patchData.summary = issue.summary;
+        updateData.summary = issue.summary;
+        hasUpdates = true;
       }
 
-      // Handle resolution status changes
-      if (issue.becomesResolved || issue.becomesUnresolved) {
-        const isResolving = issue.becomesResolved;
-        console.log(`Issue is becoming ${isResolving ? 'resolved' : 'unresolved'}`);
-        console.log('Current state:', issue.fields.State ? issue.fields.State.name : 'Unknown');
-
-        // Google Calendar color IDs:
-        // 1: Lavender, 2: Sage, 3: Grape, 4: Flamingo, 5: Banana, 6: Tangerine
-        // 7: Peacock, 8: Graphite, 9: Blueberry, 10: Basil, 11: Tomato
-        // null: Default calendar color
-
-        patchData.colorId = isResolving ? '2' : null;  // Sage for resolved, default for unresolved
-        console.log(`Setting calendar event color to: ${isResolving ? 'Sage (2)' : 'default (null)'}`);
+      // Handle description changes (resolution status affects description)
+      if (issue.becomesResolved || issue.becomesUnresolved || issue.isChanged('description')) {
+        updateData.description = `YouTrack Issue: ${issue.id}\n${issue.description || ''}`;
+        hasUpdates = true;
+        
+        if (issue.becomesResolved || issue.becomesUnresolved) {
+          const isResolving = issue.becomesResolved;
+          console.log(`Issue is becoming ${isResolving ? 'resolved' : 'unresolved'}`);
+          console.log('Current state:', issue.fields.State ? issue.fields.State.name : 'Unknown');
+          
+          // Set event color based on resolution status
+          // Color IDs: 1: Lavender, 2: Sage, 3: Grape, 4: Flamingo, 5: Banana, 6: Tangerine
+          // 7: Peacock, 8: Graphite, 9: Blueberry, 10: Basil, 11: Tomato, null: Default
+          updateData.colorId = isResolving ? '2' : null; // Sage for resolved, default for unresolved
+          console.log(`Setting event color to: ${isResolving ? 'Sage (2)' : 'Default (null)'}`);
+        }
       }
 
-      console.log('Updating calendar event with PATCH:', eventId);
-      console.log('Update data:', JSON.stringify(patchData));
+      if (hasUpdates) {
+        console.log('Updating calendar event:', eventId);
+        console.log('Update data:', JSON.stringify(updateData));
 
-      // Update calendar event using PATCH for partial update
-      const updatedEvent = calendarHelpers.callGoogleCalendarAPI(
-        ctx, 
-        assignee,
-        'PATCH', 
-        encodeURIComponent(eventId), 
-        patchData
-      );
+        // Update calendar event via Apps Script
+        const result = calendarHelpers.callAppsScriptAPI(assignee, 'update', {
+          eventId: eventId,
+          eventData: updateData,
+          calendarId: assignee.extensionProperties.googleCalendarId
+        });
 
-      console.log('Calendar event updated successfully');
+        console.log('Calendar event updated successfully');
+      } else {
+        console.log('No calendar updates needed');
+      }
 
     } catch (error) {
       console.error(`Failed to update calendar event for assignee ${assignee.login} on issue ${issue.id}:`, error.message);

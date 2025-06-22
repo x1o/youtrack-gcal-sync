@@ -2,21 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "title": "Google Calendar Sync Settings",
-  "properties": {
-    "clientId": {
-      "title": "Google OAuth Client ID",
-      "type": "string",
-      "x-scope": "GLOBAL"
-    },
-    "clientSecret": {
-      "title": "Google OAuth Client secret",
-      "type": "string",
-      "format": "secret",
-      "x-scope": "GLOBAL"
-    }
-  },
-  "required":[
-    "clientId",
-    "clientSecret"
-  ]
+  "description": "No global configuration needed. Each user configures their own Google Apps Script in their profile settings.",
+  "properties": {},
+  "additionalProperties": false
 }

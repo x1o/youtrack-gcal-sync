@@ -5,107 +5,100 @@ exports.httpHandler = {
   endpoints: [
     {
       method: 'GET',
-      path: 'oauth/url',
-      handle: function handle(ctx) {
-        try {
-          const clientId = ctx.settings.clientId;
-          if (!clientId) {
-            ctx.response.json({ error: 'OAuth client ID not configured in app settings' }, 400);
-            return;
-          }
-
-          const redirectUri = 'urn:ietf:wg:oauth:2.0:oob';
-          const scopes = 'https://www.googleapis.com/auth/calendar';
-
-          const params = calendarHelpers.buildQueryString({
-            client_id: clientId,
-            redirect_uri: redirectUri,
-            scope: scopes,
-            response_type: 'code',
-            access_type: 'offline',
-            prompt: 'consent'
-          });
-
-          const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
-          console.log('Generated OAuth authorization URL for client:', clientId);
-          ctx.response.json({ authUrl });
-        } catch (error) {
-          console.error('Failed to build OAuth URL:', error.toString());
-          ctx.response.json({ error: 'Failed to generate authorization URL' }, 500);
-        }
-      }
-    },
-    {
-      method: 'GET',
-      path: 'oauth/status',
+      path: 'appscript/config',
       handle: async function handle(ctx) {
         try {
           const user = await ctx.currentUser;
-
-          // Helper function to mask tokens (show first 5 and last 5 characters)
-          const maskToken = (token) => {
-            if (!token || token.length < 15) return null;
-            return `${token.substring(0, 5)}...${token.substring(token.length - 5)}`;
+          
+          const config = {
+            appsScriptUrl: user.extensionProperties.googleAppsScriptUrl || '',
+            hasApiKey: !!user.extensionProperties.googleAppsScriptApiKey,
+            calendarId: user.extensionProperties.googleCalendarId || ''
           };
 
-          const status = {
-            hasRefreshToken: !!user.extensionProperties.googleRefreshToken,
-            hasAccessToken: !!user.extensionProperties.googleAccessToken,
-            refreshToken: maskToken(user.extensionProperties.googleRefreshToken),
-            accessToken: maskToken(user.extensionProperties.googleAccessToken),
-            tokenExpiry: user.extensionProperties.googleTokenExpiry || null
-          };
-
-          // Calculate if token is expired
-          if (status.tokenExpiry) {
-            status.isTokenExpired = Date.now() > status.tokenExpiry;
-            status.expiryDate = new Date(status.tokenExpiry).toISOString();
-          }
-
-          console.log(`Retrieved OAuth status for user ${user.login}`);
-          ctx.response.json(status);
+          console.log(`Retrieved Apps Script config for user ${user.login}`);
+          ctx.response.json(config);
         } catch (error) {
-          console.error('Failed to retrieve OAuth status:', error.toString());
-          ctx.response.json({ error: 'Failed to retrieve OAuth status' }, 500);
+          console.error('Failed to retrieve Apps Script config:', error.toString());
+          ctx.response.json({ error: 'Failed to retrieve configuration' }, 500);
         }
       }
     },
     {
       method: 'POST',
-      path: 'oauth/token',
+      path: 'appscript/save-config',
       handle: async function handle(ctx) {
         try {
-          const code = await ctx.request.json().code;
-          if (!code) {
-            ctx.response.json({ error: 'Authorization code is required' }, 400);
-            return;
-          }
-
+          const { appsScriptUrl, apiKey } = await ctx.request.json();
           const user = await ctx.currentUser;
-
-          // Exchange code for tokens using modified helper
-          console.log(`Exchanging authorization code for tokens for user: ${user.login}`);
-          const response = await calendarHelpers.exchangeCodeForTokensWithCredentials(
-            code,
-            ctx.settings
-          );
-
-          if ("error" in response) {
-            console.error('OAuth token exchange failed:', response.error, '-', response.error_description);
-            ctx.response.json({error: response.error_description || 'Authorization failed'}, 400);
+          
+          console.log('Saving Apps Script config for user:', user.login);
+          
+          if (!appsScriptUrl || !appsScriptUrl.trim()) {
+            ctx.response.json({ error: 'Apps Script URL is required' }, 400);
+            return;
+          }
+          
+          if (!apiKey || !apiKey.trim()) {
+            ctx.response.json({ error: 'API key is required' }, 400);
+            return;
+          }
+          
+          // Basic URL validation
+          const trimmedUrl = appsScriptUrl.trim();
+          if (!trimmedUrl.startsWith('https://script.google.com/macros/')) {
+            ctx.response.json({ 
+              error: 'Invalid Apps Script URL format. It should start with https://script.google.com/macros/' 
+            }, 400);
             return;
           }
 
-          // Store tokens in user extension properties
-          user.extensionProperties.googleRefreshToken = response.refresh_token;
-          user.extensionProperties.googleAccessToken = response.access_token;
-          user.extensionProperties.googleTokenExpiry = Date.now() + (response.expires_in * 1000);
+          // Save the configuration
+          user.extensionProperties.googleAppsScriptUrl = trimmedUrl;
+          user.extensionProperties.googleAppsScriptApiKey = apiKey.trim();
 
-          console.log(`OAuth authorization completed successfully for user: ${user.login}`);
+          console.log(`Apps Script config saved for user ${user.login}`);
+          
           ctx.response.json({ success: true });
         } catch (error) {
-          console.error('Failed to complete OAuth token exchange:', error.toString());
-          ctx.response.json({ error: 'Failed to complete authorization. Please try again.' }, 500);
+          console.error('Failed to save Apps Script config:', error.toString());
+          ctx.response.json({ error: 'Failed to save configuration' }, 500);
+        }
+      }
+    },
+    {
+      method: 'POST',
+      path: 'appscript/test',
+      handle: async function handle(ctx) {
+        try {
+          const user = await ctx.currentUser;
+          
+          // Check if user has configured Apps Script
+          if (!user.extensionProperties.googleAppsScriptUrl || !user.extensionProperties.googleAppsScriptApiKey) {
+            ctx.response.json({ error: 'Apps Script URL and API key must be configured first' }, 400);
+            return;
+          }
+
+          // Test connection to Apps Script
+          try {
+            const testResult = await calendarHelpers.callAppsScriptAPI(user, 'test', {});
+            
+            console.log(`Apps Script connection test successful for user ${user.login}`);
+            ctx.response.json({ 
+              success: true, 
+              message: 'Connection to Apps Script successful',
+              appsScriptResponse: testResult
+            });
+          } catch (error) {
+            console.error('Apps Script connection test failed:', error.toString());
+            ctx.response.json({ 
+              success: false, 
+              error: 'Failed to connect to Apps Script: ' + error.message 
+            }, 500);
+          }
+        } catch (error) {
+          console.error('Failed to test Apps Script connection:', error.toString());
+          ctx.response.json({ error: 'Failed to test connection' }, 500);
         }
       }
     },
@@ -127,7 +120,7 @@ exports.httpHandler = {
     },
     {
       method: 'POST',
-      path: 'calendar/id',
+      path: 'calendar/save-id',
       handle: async function handle(ctx) {
         try {
           const { calendarId } = await ctx.request.json();
@@ -165,44 +158,22 @@ exports.httpHandler = {
         try {
           const user = await ctx.currentUser;
 
-          // Check if user has authorized Google Calendar
-          if (!user.extensionProperties.googleRefreshToken) {
-            ctx.response.json({ error: 'Please authorize Google Calendar access first' }, 401);
+          // Check if user has configured Apps Script
+          if (!user.extensionProperties.googleAppsScriptUrl || !user.extensionProperties.googleAppsScriptApiKey) {
+            ctx.response.json({ error: 'Apps Script must be configured first' }, 400);
             return;
           }
 
-          // Get access token
-          let accessToken;
+          // List calendars via Apps Script
           try {
-            accessToken = calendarHelpers.refreshAccessTokenForUser(ctx, user);
-          } catch (error) {
-            console.error('Failed to get access token:', error.toString());
-            ctx.response.json({ error: 'Failed to authenticate with Google Calendar' }, 401);
-            return;
-          }
-
-          // List calendars
-          const connection = new http.Connection('https://www.googleapis.com');
-          connection.addHeader('Authorization', 'Bearer ' + accessToken);
-
-          try {
-            const response = connection.getSync('/calendar/v3/users/me/calendarList', {});
-            const calendarList = JSON.parse(response.response);
-
-            // Extract relevant information
-            const calendars = calendarList.items.map(cal => ({
-              id: cal.id,
-              summary: cal.summary,
-              primary: cal.primary || false,
-              accessRole: cal.accessRole
-            }));
-
-            console.log(`Retrieved ${calendars.length} calendars for user ${user.login}`);
+            const calendars = await calendarHelpers.listUserCalendars(user);
+            
+            console.log(`Retrieved ${calendars.length} calendars for user ${user.login} via Apps Script`);
             ctx.response.json({ calendars });
 
           } catch (error) {
-            console.error('Failed to list calendars:', error.toString());
-            ctx.response.json({ error: 'Failed to retrieve calendar list' }, 500);
+            console.error('Failed to list calendars via Apps Script:', error.toString());
+            ctx.response.json({ error: 'Failed to retrieve calendar list: ' + error.message }, 500);
           }
 
         } catch (error) {

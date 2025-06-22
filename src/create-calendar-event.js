@@ -38,21 +38,28 @@ exports.rule = entities.Issue.onChange({
       // Step 1: Delete event from previous assignee's calendar if it exists
       if (previousAssignee && existingEventId) {
         try {
-          if (previousAssignee.extensionProperties.googleCalendarId && 
-              previousAssignee.extensionProperties.googleRefreshToken) {
+          if (previousAssignee.extensionProperties.googleAppsScriptUrl && 
+              previousAssignee.extensionProperties.googleAppsScriptApiKey &&
+              previousAssignee.extensionProperties.googleCalendarId) {
             console.log('Deleting event from previous assignee calendar:', previousAssignee.login);
-            calendarHelpers.callGoogleCalendarAPI(ctx, previousAssignee, 'DELETE', encodeURIComponent(existingEventId));
+            calendarHelpers.callAppsScriptAPI(previousAssignee, 'delete', {
+              eventId: existingEventId,
+              calendarId: previousAssignee.extensionProperties.googleCalendarId
+            });
             console.log('Event deleted from previous assignee calendar');
+            
+            // Clear the event ID only after successful deletion
+            issue.fields['Calendar Event ID'] = null;
           } else {
-            console.warn(`Previous assignee ${previousAssignee.login} has no calendar configured`);
+            console.warn(`Previous assignee ${previousAssignee.login} has no Apps Script configured`);
+            // Clear the event ID even if we can't delete (orphaned event)
+            issue.fields['Calendar Event ID'] = null;
           }
         } catch (error) {
           console.warn(`Failed to delete event from previous assignee ${previousAssignee.login}:`, error.message);
-          // Continue with next steps even if deletion fails
+          // Don't clear the event ID if deletion failed - keep it for potential retry
+          console.warn('Event ID not cleared due to deletion failure');
         }
-
-        // Clear the event ID since we deleted it
-        issue.fields['Calendar Event ID'] = null;
       }
 
       // Step 2: Create event in new assignee's calendar if there is one
@@ -63,35 +70,43 @@ exports.rule = entities.Issue.onChange({
           return;
         }
 
-        // Check if new assignee has calendar configured
+        // Check if new assignee has Apps Script configured
+        if (!currentAssignee.extensionProperties.googleAppsScriptUrl) {
+          console.warn(`Assignee ${currentAssignee.login} has not configured their Apps Script URL`);
+          return;
+        }
+
+        if (!currentAssignee.extensionProperties.googleAppsScriptApiKey) {
+          console.warn(`Assignee ${currentAssignee.login} has not configured their Apps Script API key`);
+          return;
+        }
+
         if (!currentAssignee.extensionProperties.googleCalendarId) {
           console.warn(`Assignee ${currentAssignee.login} has not configured their Google Calendar ID`);
           return;
         }
 
-        if (!currentAssignee.extensionProperties.googleRefreshToken) {
-          console.warn(`Assignee ${currentAssignee.login} has not authorized Google Calendar access`);
-          return;
-        }
-
         console.log('Creating event in assignee calendar:', currentAssignee.login);
 
-        // Prepare event data
-        const event = calendarHelpers.prepareEventData(issue);
+        // Prepare event data for Apps Script
+        const eventData = calendarHelpers.prepareEventData(issue);
 
-        console.log('Creating calendar event:', JSON.stringify(event));
-        console.log('Event type:', event.start.date ? 'All-day' : 'Timed');
-        console.log('Reminder:', event.reminders.overrides.length > 0 
-          ? calendarHelpers.formatReminderTime(event.reminders.overrides[0].minutes) + ' before' 
+        console.log('Creating calendar event:', JSON.stringify(eventData));
+        console.log('Event type:', eventData.isAllDay ? 'All-day' : 'Timed');
+        console.log('Reminder:', eventData.reminderMinutes > 0 
+          ? calendarHelpers.formatReminderTime(eventData.reminderMinutes) + ' before' 
           : 'None');
 
-        // Create calendar event for assignee
-        const createdEvent = calendarHelpers.callGoogleCalendarAPI(ctx, currentAssignee, 'POST', '', event);
+        // Create calendar event via Apps Script
+        const result = calendarHelpers.callAppsScriptAPI(currentAssignee, 'create', {
+          calendarId: currentAssignee.extensionProperties.googleCalendarId,
+          eventData: eventData
+        });
 
-        console.log('Calendar event created:', createdEvent.id);
+        console.log('Calendar event created:', result.eventId);
 
         // Save new event ID
-        issue.fields['Calendar Event ID'] = createdEvent.id;
+        issue.fields['Calendar Event ID'] = result.eventId;
         console.log('Event ID saved to issue');
       } else {
         // Issue was unassigned - event already deleted, ID already cleared

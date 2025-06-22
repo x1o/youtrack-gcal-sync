@@ -39,16 +39,19 @@ exports.rule = entities.Issue.onChange({
         return;
       }
 
-      // Check if assignee has calendar configured
-      if (!assignee.extensionProperties.googleCalendarId || !assignee.extensionProperties.googleRefreshToken) {
-        console.warn(`Assignee ${assignee.login} no longer has calendar access configured`);
+      // Check if assignee has Apps Script configured
+      if (!assignee.extensionProperties.googleAppsScriptUrl || !assignee.extensionProperties.googleAppsScriptApiKey) {
+        console.warn(`Assignee ${assignee.login} no longer has Apps Script configured`);
         return;
       }
 
-      // Delete calendar event using the wrapper with assignee as the user
-      const result = calendarHelpers.callGoogleCalendarAPI(ctx, assignee, 'DELETE', encodeURIComponent(eventId));
+      // Delete calendar event via Apps Script
+      const result = calendarHelpers.callAppsScriptAPI(assignee, 'delete', {
+        eventId: eventId,
+        calendarId: assignee.extensionProperties.googleCalendarId
+      });
 
-      console.log('Calendar event deleted successfully. Status:', result.status);
+      console.log('Calendar event deleted successfully via Apps Script');
 
       // Note: We don't need to clear the Calendar Event ID field since the issue is being deleted
 
