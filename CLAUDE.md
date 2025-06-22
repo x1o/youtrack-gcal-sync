@@ -68,7 +68,7 @@ This is a YouTrack app that synchronizes YouTrack issues with Google Calendar ev
 **Color Management**: Sage green (colorId "2") for resolved issues, default color for unresolved
 **Calendar Targeting**: All operations target user's selected calendar via calendarId parameter
 **Event ID Format**: Strips @google.com suffix when storing, passes calendarId for lookups
-**Timezone Handling**: Uses UTC for all dateTime fields
+**Timezone Handling**: Proper timezone conversion for all-day events using Apps Script's Utilities.formatDate()
 **Required YouTrack Fields**: Assignee (User), Start datetime (dateTime), Estimation (period), Remind before (period), Calendar Event ID (string)
 **Apps Script Security**: API key prevents unauthorized access to user's calendar
 
@@ -83,6 +83,7 @@ This is a YouTrack app that synchronizes YouTrack issues with Google Calendar ev
 
 **Global Settings**: No global configuration required (empty settings.json)
 **User Settings**: Each user configures their own Apps Script URL and API key in their profile widget
+**User Extension Properties**: googleCalendarId, googleAppsScriptUrl, googleAppsScriptApiKey (OAuth properties removed)
 
 ## Verified Working Features
 
@@ -111,6 +112,16 @@ This is a YouTrack app that synchronizes YouTrack issues with Google Calendar ev
 - Browse and list user's available Google Calendars
 - Target specific calendar for all operations
 - Consistent calendarId parameter usage across all API calls
+
+✅ **Timezone Support**
+- Correct all-day event dates regardless of user timezone
+- Handles timezone conversion in Apps Script using Utilities.formatDate()
+- Fixes issues where midnight start times appeared on wrong date
+
+✅ **Reminder Support**
+- Supports all reminder intervals including 0 minutes (at event start)
+- Proper handling of ISO 8601 period formats for "Remind before" field
+- Google Calendar reminder limits enforced (max 4 weeks)
 
 ## Testing
 
